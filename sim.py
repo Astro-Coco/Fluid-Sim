@@ -1,54 +1,99 @@
 import pygame
+from OpenGL.GL import *
+from OpenGL.GLU import *
+from limit import limits
 import numpy as np
-import part
-import limit
-import random
-from lj_interaction import lj_repulsion
-# initializing imported module 
-pygame.init() 
-dt = 0.12
-# displaying a window of height 
-# 500 and width 400 
-window = pygame.display.set_mode((500, 500), pygame.RESIZABLE) 
-x, y = window.get_size()  
+import lj_interaction as lj
+class Particle:
+    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,-1.]),  color = (0,200,255), size = 5):
+        self.position = np.array(position)
+        self.speed = np.array(speed)
+        self.acc = acc
+        self.color = color
+        self.size = size
+        self.talk = False
+        self.bin = 25
 
-# creating a bool value which checks 
-# if game is running 
-running = True
+    def draw(self):
+        glColor3fv(self.color)
+        glPointSize(self.size)
+        glBegin(GL_POINTS)
+        glVertex2f(*self.position)
+        glEnd()
 
-border = limit.limits(x,y,dt)
-lj = lj_repulsion()
+    def step(self, dt):
+        #réévalue les positons et vitesses
+        if self.talk:
+            print(f" pos : {self.position}, speed : {self.speed}, acc : {self.acc}")
 
-all_parts = {}
-for i in range(150):
-    all_parts[i] = part.particle(np.array([random.random()*x, random.random()*y]), speed = np.array([random.random()*10,random.random()*-10]), acc = np.array([0.,5.]), dt = dt)
+        self.speed = self.speed*(1-dt/100) + self.acc*dt
+        self.position += self.speed*dt
+
+class simulation():
+    def __init__(self) -> None:
+
+        pygame.init()
+        self.screen = pygame.display.set_mode((800, 600), pygame.DOUBLEBUF | pygame.OPENGL) 
+        self.clock = pygame.time.Clock()
+        self.dt = 0.03
+        self.border = limits(800, 600, self.dt)
+
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        gluOrtho2D(0, 800, 0, 600)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+
+        self.particles = []
+        self.collision = lj.lj_repulsion()
+        self.generate_particles(400)
+
+        self.mainloop()
+
+    def generate_particles(self, n_particles, random = True, x_max = 800, y_max = 600):
+
+        if random:
+            x_range = [np.random.random()*x_max for i in range(n_particles)]
+            y_range = [np.random.random()*y_max for i in range(n_particles)]
+
+            for x,y in zip(x_range, y_range):
+                self.particles.append(Particle((np.array((x,y))), size = 8))
+        else:
+            base_x = 200.
+            final_x = 600.
+            base_y = 200.
+            final_y = 400.
+            x_range = np.linspace(base_x,final_x,n_particles)
+            y_range = np.linspace(base_y,final_y,n_particles)
+
+            for x,y in zip(x_range, y_range):
+                self.particles.append(Particle((np.array((x,y))), size = 20))
+
+            
 
 
-# keep game running till running is true 
-while running: 
-    #update borders
-    border.x_2, border.y_2 = window.get_size()
 
-    window.fill((0,0,0)) 
-    # Check for event if user has pushed 
-    # any event in queue 
-    for event in pygame.event.get(): 
-          
-        # if event is of type quit then  
-        # set running bool to false 
-        if event.type == pygame.QUIT: 
-            running = False
-    
-    lj.repulse(all_particles = all_parts)
+    def mainloop(self):
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
 
-    for index, particle in all_parts.items():
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+            glLoadIdentity()
+            
+            self.collision.repulse(all_particles = self.particles)
+            for particle in self.particles:
+                particle.step(dt = self.dt)
+                self.border.in_range(particle)
+                particle.draw()
 
-        
-        particle.step(dt = dt)
-        border.in_range(particle)
 
-        pygame.draw.circle(window, (0, 200, 255),particle.position, 6, 0)
-        
- 
-# Draws the surface object to the screen.
-    pygame.display.update()
+            pygame.display.flip()
+            self.clock.tick(60)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    simulation()
