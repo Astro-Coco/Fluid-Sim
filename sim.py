@@ -46,7 +46,7 @@ class simulation():
 
         self.particles = []
         self.collision = lj.lj_repulsion()
-        self.generate_particles(400)
+        self.generate_particles(600)
 
         self.mainloop()
 
@@ -67,7 +67,7 @@ class simulation():
             y_range = np.linspace(base_y,final_y,n_particles)
 
             for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))), size = 20))
+                self.particles.append(Particle((np.array((x,y))), size = 25))
 
             
 
