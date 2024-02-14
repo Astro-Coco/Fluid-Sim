@@ -4,30 +4,37 @@ from OpenGL.GLU import *
 from limit import limits
 import numpy as np
 import lj_interaction as lj
-class Particle:
-    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,-1.]),  color = (0,200,255), size = 5):
-        self.position = np.array(position)
-        self.speed = np.array(speed)
-        self.acc = acc
-        self.color = color
-        self.size = size
-        self.talk = False
-        self.bin = 25
+import pandas as pd
+
+
+class particles:
+    def __init__(self, dt):
+        self.all = pd.DataFrame({'id' : [], 'pos' : np.ndarray([]), 'speed' :  np.ndarray([]), 'acc' :  np.ndarray([]), 'color' : [], 'size' : []})
+
+        self.field = np.array([0,-20])
+
+        self.dt = dt
+    
+    def add_part(self,pos, id = None, speed = np.array([10.,0.]), acc = np.array([0.,-10.]), color = (0,200,255), size = 10):
+        if id == None:
+            id = self.all['id'].max()+1
+            if id == None:
+                id = 0
+
+        self.all = pd.concat([self.all, pd.DataFrame({'id' : [id], 'pos' : [pos], 'speed' : [speed], 'acc' : [acc], 'color' : [color], 'size' : [size]})], ignore_index=True)
+        
+
+    def step(self):
+        self.all['speed'] += self.all['acc']
+        self.all['pos'] += self.all['speed']
 
     def draw(self):
-        glColor3fv(self.color)
-        glPointSize(self.size)
-        glBegin(GL_POINTS)
-        glVertex2f(*self.position)
-        glEnd()
-
-    def step(self, dt):
-        #réévalue les positons et vitesses
-        if self.talk:
-            print(f" pos : {self.position}, speed : {self.speed}, acc : {self.acc}")
-
-        self.speed = self.speed*(1-dt/100) + self.acc*dt
-        self.position += self.speed*dt
+        for index, part in self.all.iterrows(): 
+            glColor3fv(part['color'])
+            glPointSize(part['size'])
+            glBegin(GL_POINTS)
+            glVertex2f(*part['pos'])
+            glEnd()
 
 class simulation():
     def __init__(self) -> None:
@@ -35,7 +42,7 @@ class simulation():
         pygame.init()
         self.screen = pygame.display.set_mode((800, 600), pygame.DOUBLEBUF | pygame.OPENGL) 
         self.clock = pygame.time.Clock()
-        self.dt = 0.03
+        self.dt = 0.1
         self.border = limits(800, 600, self.dt)
 
         glMatrixMode(GL_PROJECTION)
@@ -44,7 +51,7 @@ class simulation():
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
-        self.particles = []
+        self.particles = particles(dt = self.dt)
         self.collision = lj.lj_repulsion()
         self.generate_particles(600)
 
@@ -57,7 +64,7 @@ class simulation():
             y_range = [np.random.random()*y_max for i in range(n_particles)]
 
             for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))), size = 8))
+                self.particles.add_part((np.array((x,y))))
         else:
             base_x = 200.
             final_x = 600.
@@ -67,7 +74,7 @@ class simulation():
             y_range = np.linspace(base_y,final_y,n_particles)
 
             for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))), size = 25))
+                self.particles.add_part((np.array((x,y))))
 
             
 
@@ -83,11 +90,12 @@ class simulation():
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             glLoadIdentity()
             
-            self.collision.repulse(all_particles = self.particles)
-            for particle in self.particles:
-                particle.step(dt = self.dt)
-                self.border.in_range(particle)
-                particle.draw()
+            '''self.collision.repulse(all_particles = self.particles)'''
+
+            self.particles.step()
+
+            self.border.keep_all_in_range(self.particles.all)
+            self.particles.draw()
 
 
             pygame.display.flip()

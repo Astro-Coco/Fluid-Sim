@@ -8,22 +8,29 @@ class limits:
         self.dt = dt
         self.bounce_efficiency = 0.95
 
-    def in_range(self, particle):
-        pos = particle.position
 
-        if pos[0]<self.x_1 or pos[0]>self.x_2 :
+    def keep_all_in_range(self, all_particles):
 
-            particle.position -= particle.speed*self.dt
-            particle.speed = self.bounce_efficiency*np.array([-1*particle.speed[0], particle.speed[1]])
 
-            return particle.position, particle.speed
-            
+        # Identify particles outside the screen
+
+        # Update positions of particles outside the screen
+        ypos = all_particles['pos'].apply(lambda x:x[1])
+        y_mask = ((ypos < 0) | (ypos > self.y_2))
+        pos = all_particles['pos'][y_mask]
+        vel = all_particles['speed'][y_mask]
+        for x,v in zip(pos, vel):
+                v[1] *= -1
+                x[1] += v[1]
+
+        xpos = all_particles['pos'].apply(lambda x:x[0])
+        x_mask = ((xpos < 5) | (xpos+5 > self.x_2))
+        pos = all_particles['pos'][x_mask]
+        vel = all_particles['speed'][x_mask]
+        for x,v in zip(pos, vel):
+                v[0] *= -1
+                x[0] += v[0]
+
         
-        if pos[1]<self.y_1 or pos[1]>self.y_2 :
-
-            particle.position -= particle.speed*self.dt
-            particle.speed = self.bounce_efficiency*np.array([particle.speed[0], -1*particle.speed[1]])
-
-            return particle.position, particle.speed
 
         

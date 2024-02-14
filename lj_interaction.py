@@ -4,11 +4,11 @@ from itertools import groupby
 class lj_repulsion:
     def __init__(self):
         self.factor = 10000
-        self.bins = 121
+        self.bins = 100
         self.side_bins = math.sqrt(self.bins)
 
 
-    def repulse(self, all_particles,x = 800, y = 600, field = np.array([0,-10])):
+    def repulse(self, all_particles,x = 800, y = 600, field = np.array([0,-50])):
 
         for particle in all_particles:
             particle.acc = field
@@ -20,6 +20,7 @@ class lj_repulsion:
 
             bin_number = y_bin*self.side_bins + x_bin
             particle.bin_number = bin_number
+        
 
         sorted_parts = sorted(all_particles, key=lambda particle: particle.bin_number)
 
