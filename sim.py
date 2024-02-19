@@ -1,12 +1,15 @@
+
 import pygame
 from OpenGL.GL import *
 from OpenGL.GLU import *
+import numpy as np
 from limit import limits
 import numpy as np
-import lj_interaction as lj
+from lj_interaction import lj_repulsion
 import random
 from streams import Stream
-import time
+from pygame.locals import *
+
 class Particle:
     def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,-20.]),  color = (0,200,255), size = 5, heat_factor = 0.04, mass = 1):
         self.position = np.array(position)
@@ -21,14 +24,15 @@ class Particle:
 
     def draw(self):
         glColor3fv(self.color)
-        glPointSize(self.size)
-        glBegin(GL_POINTS)
-        glVertex2f(*self.position)
-        glEnd()
+        glPushMatrix()
+        glTranslatef(*self.position, 0)
+        quad = gluNewQuadric()
+        gluDisk(quad, 0, self.size/2, 32, 1)
+        glPopMatrix()
 
     def step(self, dt):
 
-        self.speed = np.array([1-random.random()*self.heat_factor,1-random.random()*self.heat_factor])*self.speed*(1-dt/10000) + self.acc*dt
+        self.speed = np.array([1-random.random()*self.heat_factor,1-random.random()*self.heat_factor])*self.speed*(1-dt/10) + self.acc*dt
         self.position += self.speed*dt
 
 class DraggableCircle():
@@ -67,7 +71,7 @@ class DraggableCircle():
             self.update_position()
 
 class Warp():
-    def __init__(self,dt, radius = 60, intensity = 600.):
+    def __init__(self,dt, radius = 60, intensity = 10.,y = 600,x = 600):
         self.dt = dt
         self.radius = radius
         self.intensity = intensity
@@ -75,11 +79,14 @@ class Warp():
         self.inverted = False
         self.last_event = None
 
-    def handle_events(self, event, all_particle):
+        self.y = y
+        self.x = x
 
+    def handle_events(self, event, all_particle, x, y):
+        self.y = y
+        self.x = x
         if event.type == 771 and self.last_event != 771:
             if not self.inverted:
-                print('EVENTT')
                 self.intensity = abs(self.intensity)
                 self.inverted = True
             else:
@@ -88,34 +95,40 @@ class Warp():
             
 
     
-        
-        print(event.type)
+
         if self.dragging and (event.type == pygame.MOUSEBUTTONUP):
             self.dragging = False
 
         elif (event.type == pygame.MOUSEMOTION and self.dragging) or event.type == pygame.MOUSEBUTTONDOWN:
             self.dragging = True
             mouse_pos = np.array(pygame.mouse.get_pos())
-            mouse_pos = np.array([float(mouse_pos[0]), float(600.-mouse_pos[1])])
+
+            mouse_pos = np.array([float(mouse_pos[0]), float(self.y - mouse_pos[1])])
+
+
             for part in all_particle:
                 vector = part.position - mouse_pos
 
                 distance = np.linalg.norm(vector)
                 
                 if distance < self.radius:
-
                     part.speed += (self.intensity/distance)*vector
+
         self.last_event = event 
 class simulation():
-    def __init__(self, dt, N = 600, heat = 0.01, reacteur = False, big = True, collision_force = 81000, constant_field = np.array([0.,-100.]), warp = True, warp_radius = 30.) -> None:
-
+    def __init__(self, dt, N = 600, heat = 0.01, reacteur = True, big = True, collision_force = 81000, constant_field = np.array([0.,-100.]), warp = True, warp_radius = 30.) -> None:
+        full_screen = False
         pygame.init()
-        self.screen = pygame.display.set_mode((800, 600), pygame.DOUBLEBUF | pygame.OPENGL) 
+        if full_screen:
+            self.x, self.y = 1550, 850
+        else:
+            self.x, self.y = 1550/2,850
+        self.screen = pygame.display.set_mode((self.x,self.y), pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE) 
         self.clock = pygame.time.Clock()
         self.dt = dt
         self.N = N
         self.heat = heat
-        self.border = limits(800, 600, self.dt)
+        self.border = limits(x = self.x,y =  self.y, dt = self.dt)
         self.reacteur = reacteur
         self.big = big
         self.collision_force = collision_force
@@ -124,21 +137,21 @@ class simulation():
         if reacteur:
             self.initialize_reactor()
         if warp:
-            self.warp = Warp(dt = self.dt, radius = self.warp_radius, intensity= self.warp_intensity)
+            self.warp = Warp(dt = self.dt, radius = self.warp_radius, intensity= self.warp_intensity, y = self.y, x = self.x)
 
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluOrtho2D(0, 800, 0, 600)
+        gluOrtho2D(0, self.x, 0, self.y)
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
 
         self.particles = []
-        self.collision = lj.lj_repulsion(self.collision_force, constant_field= constant_field)
-        self.generate_particles(N)
+        self.collision = lj_repulsion(self.collision_force, constant_field= constant_field)
+        self.generate_particles(N, x_max = self.x, y_max = self.y)
         
 
         if self.big:
-            self.Boule = Particle( position=np.array([400.,300.]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 50, color = (1,0,0),mass = 25)
+            self.Boule = Particle( position=np.array([self.x/2,self.y/2]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 50, color = (1,0,0),mass = 25)
             self.particles.append(self.Boule)
             self.BOULE = DraggableCircle(self.Boule,self.dt)
 
@@ -159,7 +172,7 @@ class simulation():
 
 
 
-    def generate_particles(self, n_particles, random = True, x_max = 800, y_max = 600):
+    def generate_particles(self, n_particles, random = True , x_max = 600, y_max = 600):
 
         if random:
             x_range = [np.random.random()*x_max for i in range(n_particles)]
@@ -188,14 +201,14 @@ class simulation():
                     running = False
                 if self.big:
                     self.BOULE.handle_events(event)
-                
-            self.warp.handle_events(self.last_event,self.particles)
+
+            self.warp.handle_events(self.last_event,self.particles,self.x,self.y)
                 
 
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             glLoadIdentity()
             
-            self.collision.repulse(all_particles = self.particles)
+            self.collision.repulse(all_particles = self.particles,x = self.x, y = self.y)
             for particle in self.particles:
                 particle.step(dt = self.dt)
                 self.border.in_range(particle)
@@ -213,9 +226,10 @@ class simulation():
 
 
             pygame.display.flip()
-            self.clock.tick(30)
+            self.clock.tick(60)
 
     pygame.quit()
 
 if __name__ == "__main__":
-    simulation( dt = 0.01, N = 500, heat = 0.01, reacteur = False, big = False, collision_force = 81000, constant_field= np.array([0.,-70.]), warp = True, warp_radius =100)
+    
+    simulation( dt = 0.01, N = 700, heat = 0.01, reacteur = False, big = True, collision_force = 90000, constant_field= np.array([0.,-300.]), warp = True, warp_radius =120)
