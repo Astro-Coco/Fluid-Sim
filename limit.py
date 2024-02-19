@@ -6,7 +6,7 @@ class limits:
         self.x_2 = x
         self.y_2 = y
         self.dt = dt
-        self.bounce_efficiency = 0.999
+        self.bounce_efficiency = 0.9999
 
     def in_range(self, particle):
         pos = particle.position
