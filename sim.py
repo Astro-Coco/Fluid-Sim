@@ -9,9 +9,12 @@ from lj_interaction import lj_repulsion
 import random
 from streams import Stream
 from pygame.locals import *
-
+from Collisions import Collision
+import fluidsim
+from FLOW import Flow
+from gravitation import Gravitation
 class Particle:
-    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,-20.]),  color = (0,200,255), size = 5, heat_factor = 0.04, mass = 1):
+    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,200,255), size = 8, heat_factor = 0.04, mass = 1):
         self.position = np.array(position)
         self.speed = np.array(speed)
         self.acc = acc
@@ -21,6 +24,8 @@ class Particle:
         
 
         self.heat_factor = heat_factor
+        self.trace = [np.copy(position)]
+        self.max_trail_length = 500
 
     def draw(self):
         glColor3fv(self.color)
@@ -30,10 +35,31 @@ class Particle:
         gluDisk(quad, 0, self.size/2, 32, 1)
         glPopMatrix()
 
-    def step(self, dt):
+    def draw_trace(self):
+        if len(self.trace) < 2:
+            return
+        glColor3f(0.5, 0.8, 0.7)
+        glLineWidth(3.0)
+        glBegin(GL_LINE_STRIP)
+        for pos in self.trace:
+            glVertex2f(*pos)
+        glEnd()
 
-        self.speed = np.array([1-random.random()*self.heat_factor,1-random.random()*self.heat_factor])*self.speed*(1-dt/10) + self.acc*dt
+    def step(self, dt):
+        friction = True
+        if friction:
+            term = self.speed**2*dt/1000
+            if np.linalg.norm(self.speed)<40:
+                term = 0
+            self.speed = self.speed - term  + self.acc*dt
+        else:
+            self.speed = self.speed + self.acc*dt
         self.position += self.speed*dt
+
+        if self.color != (0,0,0):
+            self.trace.append(np.copy(self.position))
+        if len(self.trace) > self.max_trail_length:
+            self.trace.pop(0)
 
 class DraggableCircle():
     def __init__(self, boule,dt):
@@ -47,7 +73,7 @@ class DraggableCircle():
 
     def update_speed(self):
         self.boule.speed = (self.new_position-self.last_pos)/self.dt
-        while np.linalg.norm(self.boule.speed) >= 1500:
+        while (np.linalg.norm(self.boule.speed) >= 250):
             self.boule.speed *= 0.9
 
     def check_collision(self, mouse_pos):
@@ -116,13 +142,13 @@ class Warp():
 
         self.last_event = event 
 class simulation():
-    def __init__(self, dt, N = 600, heat = 0.01, reacteur = True, big = True, collision_force = 81000, constant_field = np.array([0.,-100.]), warp = True, warp_radius = 30.) -> None:
+    def __init__(self, dt = 0.01, N = 600, heat = 0.01, reacteur = True, big = True, collision_force = 81000, constant_field = np.array([0.,-100.]), warp = True, warp_radius = 30., gravity = None, trace_paths=True, full_screen = False) -> None:
         full_screen = True
         pygame.init()
         if full_screen:
             self.x, self.y = 1550, 850
         else:
-            self.x, self.y = 1550/2,850
+            self.x, self.y = 800,600
         self.screen = pygame.display.set_mode((self.x,self.y), pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE) 
         self.clock = pygame.time.Clock()
         self.dt = dt
@@ -133,7 +159,12 @@ class simulation():
         self.big = big
         self.collision_force = collision_force
         self.warp_radius = warp_radius
-        self.warp_intensity = -600
+        self.warp_intensity = -400
+        self.gravity = gravity
+        self.trace_paths = trace_paths
+        self.flow = Flow(self.x,self.y)
+        if self.gravity is not None:
+            self.gravitational = Gravitation(grav_force = self.gravity)
         if reacteur:
             self.initialize_reactor()
         if warp:
@@ -143,15 +174,15 @@ class simulation():
         glLoadIdentity()
         gluOrtho2D(0, self.x, 0, self.y)
         glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-
         self.particles = []
-        self.collision = lj_repulsion(self.collision_force, constant_field= constant_field)
-        self.generate_particles(N, x_max = self.x, y_max = self.y)
+        self.generate_particles(N, x_max = self.x, y_max = self.y, custom = True, random= False)
+        self.collision = Collision(self.x,self.y,100)
+        self.lj = lj_repulsion(collision_force=collision_force,constant_field=constant_field)
+        
         
 
         if self.big:
-            self.Boule = Particle( position=np.array([self.x/2,self.y/2]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 50, color = (1,0,0),mass = 25)
+            self.Boule = Particle( position=np.array([self.x/2,self.y/2]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 10, color = (1,0,0),mass = 25)
             self.particles.append(self.Boule)
             self.BOULE = DraggableCircle(self.Boule,self.dt)
 
@@ -172,15 +203,22 @@ class simulation():
 
 
 
-    def generate_particles(self, n_particles, random = True , x_max = 600, y_max = 600):
-
-        if random:
+    def generate_particles(self, n_particles, random = True , x_max = 600, y_max = 600, regular = False, custom = False):
+        if custom:
+            print("Custom particles")
+            first_factor = int((np.random.random()+ 0.05)*10)
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor,color = (0,100,0), heat_factor = self.heat,mass = first_factor/6))
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = 15,color = (100,0,0), heat_factor = self.heat,mass = 2))
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = 30,color = (0,0,1), heat_factor = self.heat,mass = 4))
+            first_factor = int((np.random.random()+ 0.1)*40)
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor,color = (0,0,0), heat_factor = self.heat,mass = first_factor/2))
+        elif random:
             x_range = [np.random.random()*x_max for i in range(n_particles)]
             y_range = [np.random.random()*y_max for i in range(n_particles)]
 
             for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))),speed = np.array([50.,0.]),  size = 10, heat_factor = self.heat))
-        else:
+                self.particles.append(Particle((np.array((x,y))),speed = np.array([np.random.random()*300,(np.random.random()-0.5)*400]),  size = 12, heat_factor = self.heat,mass = 2))
+        elif regular:
             base_x = 200.
             final_x = 600.
             base_y = 200.
@@ -189,12 +227,17 @@ class simulation():
             y_range = np.linspace(base_y,final_y,n_particles)
 
             for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))),speed = np.array([300.,0.]),  size = 10, heat_factor = self.heat))
-
-
+                self.particles.append(Particle((np.array((x,y))),speed = np.array([np.random.random()*300,(np.random.random()-0.5)*400]),  size = 5, heat_factor = self.heat))
+    
     def mainloop(self):
+        i = 0
         running = True
+
+
         while running:
+            i+=1
+
+
             for event in pygame.event.get():
                 self.last_event = event
                 if event.type == pygame.QUIT:
@@ -208,10 +251,15 @@ class simulation():
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             glLoadIdentity()
             
-            self.collision.repulse(all_particles = self.particles,x = self.x, y = self.y)
+            self.collision.check_collision(all_parts = self.particles)
+            if self.gravity is not None:
+                self.gravitational.compute_gravity(all_particles = self.particles, x = self.x, y = self.y)
+
             for particle in self.particles:
+
                 particle.step(dt = self.dt)
                 self.border.in_range(particle)
+
                 if self.reacteur:
                     self.stream.flow(particle)
                     self.Istream.flow(particle)
@@ -222,8 +270,9 @@ class simulation():
                     self.lustream.flow(particle)
                     self.rustream.flow(particle)
                 
+                if self.trace_paths:
+                    particle.draw_trace()
                 particle.draw()
-
 
             pygame.display.flip()
             self.clock.tick(60)
@@ -231,5 +280,4 @@ class simulation():
     pygame.quit()
 
 if __name__ == "__main__":
-    
-    simulation( dt = 0.01, N = 350, heat = 0.01, reacteur = False, big = True, collision_force = 90000, constant_field= np.array([0.,-300.]), warp = True, warp_radius =120)
+    simulation( dt = 0.01, N = 3, heat = 0.0, reacteur = False, big = False, collision_force = -10000, constant_field= np.array([0.,0.]), warp = True, warp_radius =80, gravity =10000)

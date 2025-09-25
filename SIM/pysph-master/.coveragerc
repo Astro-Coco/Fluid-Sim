@@ -1,0 +1,8 @@
+[run]
+plugins = Cython.Coverage
+source = pysph
+omit =
+	*/tests/*
+	*/examples/*
+branch = True
+parallel = True

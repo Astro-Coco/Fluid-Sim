@@ -1,0 +1,66 @@
+name: ZOLTAN/MPI Tests
+
+on:
+  pull_request:
+  schedule:
+    # Run test at 0400 UTC on day 1 of every month to create auto-generated
+    # code afresh and cache it.
+    - cron: '0 4 1 * *'  # Ref https://crontab.guru/#0_4_1_*_*
+
+jobs:
+  tests:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [3.11]
+
+    env:
+      USE_TRILINOS: 1
+      ZOLTAN_INCLUDE: /usr/include/trilinos
+      ZOLTAN_LIBRARY: /usr/lib/x86_64-linux-gnu
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux packages ZOLTAN support
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openmpi-bin libopenmpi-dev libtrilinos-zoltan-dev
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge
+      - name: Install dependencies
+        run: |
+          conda info
+          conda install -c conda-forge numpy 'cython<3.0'
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install mpi4py
+          python -m pip install https://github.com/pypr/cyarray/zipball/master
+          python -m pip install --no-build-isolation https://github.com/pypr/pyzoltan/zipball/master
+          python -m pip install https://github.com/pypr/compyle/zipball/master
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-test.txt
+          python setup.py develop
+      # Cache auto-generated code. Cache key changes every month.
+      # Thanks https://stackoverflow.com/a/60942437
+      - name: Get month to use as cache key.
+        id: month
+        run: echo "month==$(date +'%m')" >> $GITHUB_OUTPUT
+      - name: Deal with auto-generated code cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pysph
+            ~/.compyle
+          key: zoltan-${{ steps.month.outputs.month }}
+      - name: Run tests
+        run: |
+          python -m pytest -v -m 'slow or parallel'

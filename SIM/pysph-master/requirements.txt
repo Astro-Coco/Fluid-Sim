@@ -1,0 +1,8 @@
+numpy
+setuptools>=42.0.0
+Cython<3.0
+cyarray
+compyle>=0.8
+mako
+pytools
+Beaker
