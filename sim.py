@@ -117,7 +117,7 @@ class Warp():
         self.last_event = event 
 class simulation():
     def __init__(self, dt, N = 600, heat = 0.01, reacteur = True, big = True, collision_force = 81000, constant_field = np.array([0.,-100.]), warp = True, warp_radius = 30.) -> None:
-        full_screen = False
+        full_screen = True
         pygame.init()
         if full_screen:
             self.x, self.y = 1550, 850
@@ -232,4 +232,4 @@ class simulation():
 
 if __name__ == "__main__":
     
-    simulation( dt = 0.01, N = 700, heat = 0.01, reacteur = False, big = True, collision_force = 90000, constant_field= np.array([0.,-300.]), warp = True, warp_radius =120)
+    simulation( dt = 0.01, N = 350, heat = 0.01, reacteur = False, big = True, collision_force = 90000, constant_field= np.array([0.,-300.]), warp = True, warp_radius =120)
