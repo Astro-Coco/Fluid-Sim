@@ -39,12 +39,19 @@ class Particle:
     def draw_trace(self):
         if len(self.trace) < 2:
             return
-        glColor3f(self.color)
+
+        # Normalize color to [0,1] if necessary
+        r, g, b = self.color
+        if max(r, g, b) > 1.0:
+            r, g, b = r / 255.0, g / 255.0, b / 255.0
+
+        glColor3f(r, g, b)
         glLineWidth(3.0)
         glBegin(GL_LINE_STRIP)
         for pos in self.trace:
             glVertex2f(*pos)
         glEnd()
+
 
     def step(self, dt):
         friction = True
@@ -209,9 +216,9 @@ class simulation():
         if custom:
             print("Custom particles")
             first_factor = int((np.random.random()+ 0.05)*45)
-            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor/3,color = (0,100,0), heat_factor = self.heat,mass = first_factor/6))
-            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor/1.5,color = (100,0,0), heat_factor = self.heat,mass = first_factor/3))
-            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor/0.75,color = (0,0,1), heat_factor = self.heat,mass = 2*first_factor/3))
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = first_factor/3,color = (0,100,0), heat_factor = self.heat,mass = first_factor/6))
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = first_factor/1.5,color = (100,0,0), heat_factor = self.heat,mass = first_factor/3))
+            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = first_factor/0.75,color = (0,0,1), heat_factor = self.heat,mass = 2*first_factor/3))
             first_factor = int((np.random.random()+ 0.1)*40)
             #self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor,color = (0,0,0), heat_factor = self.heat,mass = first_factor/2))
         elif random:
