@@ -53,8 +53,14 @@ class Collision:
                         position_vector = part2.position - part.position
                         norme = np.linalg.norm(position_vector)
                         
-                        
-                        if norme <= (part.size + part2.size)/2:
+                        mean = (part.size + part2.size)/2
+                        if norme <= mean:
+                            gap =  mean - norme
+                            portion2 = part2.size/mean
+                            portion1 = part.size/mean
+
+                            part.position -= gap*portion1*position_vector/norme
+                            part2.position += gap*portion2*position_vector/norme
 
                             normal = position_vector/norme if norme != 0 else position_vector
                             relative_velocity_normal = np.dot(relative_velocity, normal)
