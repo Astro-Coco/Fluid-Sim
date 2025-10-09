@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=64", "wheel", "Cython>=3.0", "numpy>=1.20"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gravitation2_cy"
+version = "0.1.0"
+requires-python = ">=3.8"
+description = "Cython gravity with Particle objects"
+
+[project2]
+name = "collision_cy"
+version = "0.1.0"
+requires-python = ">=3.8"
+description = "Cython-binned circle collisions"

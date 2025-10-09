@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: gravitation2_cy
+Version: 0.1.0
+Summary: Cython gravity with Particle objects
+Requires-Python: >=3.8

@@ -6,12 +6,16 @@ import numpy as np
 from limit import limits
 import numpy as np
 from lj_interaction import lj_repulsion
-import random
 from streams import Stream
 from pygame.locals import *
 from Collisions import Collision
 from FLOW import Flow
-from gravitation import Gravitation
+from gravitation2 import compute_gravity_particles
+# collision_wrapper.py (Python)
+# your wrapper stays the same, or:
+
+
+
 
 class Particle:
     def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,200,255), size = 8, heat_factor = 0.04, mass = 1, trace = False):
@@ -174,12 +178,12 @@ class Warp():
         self.last_event = event 
 class simulation():
     def __init__(self, dt = 0.01, N = 600, heat = 0.01, reacteur = True, big = True, collision_force = 81000, constant_field = np.array([0.,0.]), warp = True, warp_radius = 30., gravity = 80000, trace_paths=False, full_screen = False) -> None:
-        full_screen = True
+        full_screen = False
         pygame.init()
         if full_screen:
-            self.x, self.y = 1550, 850
+            self.x, self.y = 2500, 1000
         else:
-            self.x, self.y = 800,600
+            self.x, self.y = 1850,900
         self.screen = pygame.display.set_mode((self.x,self.y), pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE) 
         self.clock = pygame.time.Clock()
         self.dt = dt
@@ -195,7 +199,7 @@ class simulation():
         self.trace_paths = trace_paths
         self.flow = Flow(self.x,self.y)
         if self.gravity is not None:
-            self.gravitational = Gravitation(grav_force = self.gravity)
+            self.grav_force = float(self.gravity)
         if reacteur:
             self.initialize_reactor()
         if warp:
@@ -206,8 +210,8 @@ class simulation():
         gluOrtho2D(0, self.x, 0, self.y)
         glMatrixMode(GL_MODELVIEW)
         self.particles = []
-        self.generate_particles(N, x_max = self.x, y_max = self.y, custom = True, random= True, trace = True)
-        self.collision = Collision(self.x,self.y,100)
+        self.generate_particles(N, x_max = self.x, y_max = self.y, custom = False, random= True, trace = True)
+        self.collision = Collision(self.x,self.y,75)
         self.lj = lj_repulsion(collision_force=collision_force,constant_field=constant_field)
         
         
@@ -290,7 +294,7 @@ class simulation():
             
             self.collision.check_collision(all_parts = self.particles)
             if self.gravity is not None:
-                self.gravitational.compute_gravity(all_particles = self.particles, x = self.x, y = self.y)
+                compute_gravity_particles(particles = self.particles, grav_force = self.grav_force)
 
             for particle in self.particles:
 
@@ -318,7 +322,7 @@ class simulation():
 
 if __name__ == "__main__":
     simulation( dt = 0.002,
-                N = 50,
+                N = 200,
                   heat = 0.0,
                     reacteur = False,
                       big = False,
@@ -327,4 +331,4 @@ if __name__ == "__main__":
                               warp = True,
                                 warp_radius =80,
                                   gravity = 30000, 
-                                   trace_paths=True)
+                                   trace_paths=False)
