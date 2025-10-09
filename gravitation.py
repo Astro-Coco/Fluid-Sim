@@ -9,10 +9,13 @@ class Gravitation():
         self.side_bins = math.sqrt(self.bins)
         self.grav_force = grav_force
 
-    def compute_gravity(self, all_particles, x= 800, y = 600):
+    def compute_gravity(self, all_particles, x= 800, y = 600, custom=True):
         x_box = x / self.side_bins
         y_box = y / self.side_bins
 
+        if custom:
+            pass
+        
         for particle in all_particles:
             pos_x = particle.position[0]
             pos_y = particle.position[1]

@@ -40,7 +40,7 @@ class Collision:
                             if relative_velocity_normal < 0:
                                 # Calculate impulse
                                 impulse = 2*part.mass*part2.mass / (part.mass + part2.mass)* relative_velocity_normal*normal
-                                damp = 0.98
+                                damp = 0.999
                                 part.speed += damp*impulse / part.mass
                                 part2.speed -= damp*impulse / part2.mass
 

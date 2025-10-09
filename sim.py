@@ -11,93 +11,10 @@ from pygame.locals import *
 from Collisions import Collision
 from FLOW import Flow
 from gravitation2 import compute_gravity_particles
-# collision_wrapper.py (Python)
+from particle import Particle
 # your wrapper stays the same, or:
+from gravitation import Gravitation
 
-from wallpaper import attach_window_to_wallpaper
-
-# create your window
-
-
-
-class Particle:
-    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,200,255), size = 8, heat_factor = 0.04, mass = 1, trace = False):
-        self.position = np.array(position)
-        self.speed = np.array(speed)
-        self.acc = acc
-        self.color = color
-        self.size = size
-        self.mass = mass
-        self.trace = trace
-        
-
-        self.heat_factor = heat_factor
-        self.trace = [np.copy(position)]
-        self.max_trail_length = 200
-
-    def draw(self):
-        glColor3fv(self.color)
-        glPushMatrix()
-        glTranslatef(*self.position, 0)
-        quad = gluNewQuadric()
-        gluDisk(quad, 0, self.size/2, 32, 1)
-        glPopMatrix()
-
-    def draw_trace(self):
-        if len(self.trace) < 2:
-            return
-
-        # Normalize color to [0,1] if necessary
-        r, g, b = self.color
-        factor = 1.75
-        r, g, b = r*factor, g*factor, b*factor
-        if max(r, g, b) > 1.0:
-            r, g, b = r / 255.0, g / 255.0, b / 255.0
-
-        # Get window/world size (your ortho matches window size)
-        surf = pygame.display.get_surface()
-        W, H = (surf.get_size() if surf else (None, None))
-        # If we know the size, use half-width/half-height as a wrap threshold
-        # (any bigger jump than that is almost certainly a wrap)
-        thr_x = W * 0.5 if W else float("inf")
-        thr_y = H * 0.5 if H else float("inf")
-
-        glColor3f(r, g, b)
-        glLineWidth(3.0)
-
-        # Draw multiple strips, restarting when a wrap-jump is detected
-        glBegin(GL_LINE_STRIP)
-        prev = self.trace[0]
-        glVertex2f(*prev)
-        for pos in self.trace[1:]:
-            dx = abs(pos[0] - prev[0])
-            dy = abs(pos[1] - prev[1])
-            if dx > thr_x or dy > thr_y:
-                glEnd()
-                glBegin(GL_LINE_STRIP)  # start a new segment after wrap
-                glVertex2f(*pos)
-            else:
-                glVertex2f(*pos)
-            prev = pos
-        glEnd()
-
-
-
-    def step(self, dt):
-        friction = True
-        if friction:
-            v = np.linalg.norm(self.speed)
-            term = dt*1/2000*self.speed if v > 200 else 0
-            self.speed = self.speed - term  + self.acc*dt
-        else:
-            self.speed = self.speed + self.acc*dt
-        self.position += self.speed*dt
-    
-        if self.trace:
-            if self.color != (0,0,0):
-                self.trace.append(np.copy(self.position))
-            if len(self.trace) > self.max_trail_length:
-                self.trace.pop(0)
 
 class DraggableCircle():
     def __init__(self, boule,dt):
@@ -202,7 +119,8 @@ class simulation():
         self.trace_paths = trace_paths
         self.flow = Flow(self.x,self.y)
         if self.gravity is not None:
-            self.grav_force = float(self.gravity)
+            #self.grav_force = float(self.gravity)
+            self.gravitational = Gravitation(grav_force = self.gravity)
         if reacteur:
             self.initialize_reactor()
         if warp:
@@ -296,7 +214,8 @@ class simulation():
             
             self.collision.check_collision(all_parts = self.particles)
             if self.gravity is not None:
-                compute_gravity_particles(particles = self.particles, grav_force = self.grav_force)
+                #compute_gravity_particles(particles = self.particles, grav_force = self.grav_force)
+                self.gravitational.compute_gravity(all_particles = self.particles, x = self.x, y = self.y)
 
             for particle in self.particles:
 
