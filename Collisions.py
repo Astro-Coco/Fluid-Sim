@@ -31,8 +31,8 @@ class Collision:
                             portion2 = part2.size/mean
                             portion1 = part.size/mean
 
-                            part.position -= gap*portion1*position_vector/norme
-                            part2.position += gap*portion2*position_vector/norme
+                            part.position -= gap*portion2*position_vector/norme
+                            part2.position += gap*portion1*position_vector/norme
 
                             normal = position_vector/norme if norme != 0 else position_vector
                             relative_velocity_normal = np.dot(relative_velocity, normal)
@@ -40,7 +40,7 @@ class Collision:
                             if relative_velocity_normal < 0:
                                 # Calculate impulse
                                 impulse = 2*part.mass*part2.mass / (part.mass + part2.mass)* relative_velocity_normal*normal
-                                damp = 0.99
+                                damp = 0.98
                                 part.speed += damp*impulse / part.mass
                                 part2.speed -= damp*impulse / part2.mass
 

@@ -14,6 +14,9 @@ from gravitation2 import compute_gravity_particles
 # collision_wrapper.py (Python)
 # your wrapper stays the same, or:
 
+from wallpaper import attach_window_to_wallpaper
+
+# create your window
 
 
 
@@ -210,17 +213,16 @@ class simulation():
         gluOrtho2D(0, self.x, 0, self.y)
         glMatrixMode(GL_MODELVIEW)
         self.particles = []
-        self.generate_particles(N, x_max = self.x, y_max = self.y, custom = False, random= True, trace = True)
+        self.generate_particles(N, x_max = self.x, y_max = self.y, custom = True, random= True, trace = True)
         self.collision = Collision(self.x,self.y,75)
         self.lj = lj_repulsion(collision_force=collision_force,constant_field=constant_field)
         
         
 
         if self.big:
-            self.Boule = Particle( position=np.array([self.x/2,self.y/2]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 10, color = (1,0,0),mass = 25)
+            self.Boule = Particle( position=np.array([self.x/2,self.y/2]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 50, color = (1,0,0),mass = 75)
             self.particles.append(self.Boule)
             self.BOULE = DraggableCircle(self.Boule,self.dt)
-
         self.mainloop()
 
     def initialize_reactor(self):
@@ -238,7 +240,7 @@ class simulation():
 
 
 
-    def generate_particles(self, n_particles, random = True , x_max = 600, y_max = 600, regular = False, custom = False, trace = False):
+    def generate_particles(self, n_particles, random = True , x_max = 600, y_max = 600, regular = False, custom = True, trace = False):
         if custom:
             print("Custom particles")
             first_factor = 20
@@ -322,7 +324,7 @@ class simulation():
 
 if __name__ == "__main__":
     simulation( dt = 0.002,
-                N = 200,
+                N = 100,
                   heat = 0.0,
                     reacteur = False,
                       big = False,
@@ -331,4 +333,4 @@ if __name__ == "__main__":
                               warp = True,
                                 warp_radius =80,
                                   gravity = 30000, 
-                                   trace_paths=False)
+                                   trace_paths=True)
