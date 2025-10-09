@@ -1,5 +1,9 @@
+import numpy as np
+from OpenGL.GLU import *
+from OpenGL.GL import *
+import pygame
 class Particle:
-    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,200,255), size = 8, heat_factor = 0.04, mass = 1, trace = False):
+    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,200,255), size = 8, heat_factor = 0.04, mass = 1, trace = False, ghost = False):
         self.position = np.array(position)
         self.speed = np.array(speed)
         self.acc = acc
@@ -7,6 +11,7 @@ class Particle:
         self.size = size
         self.mass = mass
         self.trace = trace
+        self.ghost = ghost
         
 
         self.heat_factor = heat_factor

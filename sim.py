@@ -1,204 +1,204 @@
-
 import pygame
 from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
+from pygame.locals import *
+
 from limit import limits
-import numpy as np
 from lj_interaction import lj_repulsion
 from streams import Stream
-from pygame.locals import *
 from Collisions import Collision
 from FLOW import Flow
-from gravitation2 import compute_gravity_particles
 from particle import Particle
-# your wrapper stays the same, or:
 from gravitation import Gravitation
 
 
-class DraggableCircle():
-    def __init__(self, boule,dt):
-        self.dragging = False
-        self.boule = boule
-        self.dt = dt
-
-    def update_position(self):
-        self.last_pos =  self.boule.position
-        self.boule.position = self.new_position
-
-    def update_speed(self):
-        self.boule.speed = (self.new_position-self.last_pos)/self.dt
-        while (np.linalg.norm(self.boule.speed) >= 250):
-            self.boule.speed *= 0.9
-
-    def check_collision(self, mouse_pos):
-        mouse_pos[1] = 600-mouse_pos[1]
-        distance = np.linalg.norm(self.boule.position - mouse_pos)
-        return distance < self.boule.size
-
-    def handle_events(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            mouse_pos = np.array(pygame.mouse.get_pos())
-            if self.check_collision(mouse_pos):
-                self.dragging = True
-        elif self.dragging and (event.type == pygame.MOUSEBUTTONUP):
-            self.dragging = False
-
-            self.update_speed()
-
-        elif event.type == pygame.MOUSEMOTION and self.dragging:
-            self.new_position = np.array(pygame.mouse.get_pos())
-            self.new_position = np.array([float(self.new_position[0]), float(600. - self.new_position[1])])
-            self.update_position()
-
-class Warp():
-    def __init__(self,dt, radius = 60, intensity = 10.,y = 600,x = 600):
+# ---------------------------------------------------------------------------
+# WARP TOOL
+# ---------------------------------------------------------------------------
+class Warp:
+    def __init__(self, dt, radius=60, intensity=10.0, y=600, x=600):
         self.dt = dt
         self.radius = radius
         self.intensity = intensity
         self.dragging = False
         self.inverted = False
         self.last_event = None
-
         self.y = y
         self.x = x
 
     def handle_events(self, event, all_particle, x, y):
-        self.y = y
-        self.x = x
+        """Handles interactive warp attraction/repulsion."""
+        self.y, self.x = y, x
+
+        # Toggle intensity direction
         if event.type == 771 and self.last_event != 771:
-            if not self.inverted:
-                self.intensity = abs(self.intensity)
-                self.inverted = True
-            else:
-                self.intensity = -abs(self.intensity)
-                self.inverted = False
-            
+            self.intensity = -self.intensity
+            self.inverted = not self.inverted
 
-    
-
-        if self.dragging and (event.type == pygame.MOUSEBUTTONUP):
+        # Mouse drag behavior
+        if self.dragging and event.type == pygame.MOUSEBUTTONUP:
             self.dragging = False
 
         elif (event.type == pygame.MOUSEMOTION and self.dragging) or event.type == pygame.MOUSEBUTTONDOWN:
             self.dragging = True
-            mouse_pos = np.array(pygame.mouse.get_pos())
-
-            mouse_pos = np.array([float(mouse_pos[0]), float(self.y - mouse_pos[1])])
-
+            mouse_pos = np.array(pygame.mouse.get_pos(), dtype=float)
+            mouse_pos = np.array([mouse_pos[0], self.y - mouse_pos[1]])
 
             for part in all_particle:
                 vector = part.position - mouse_pos
-
                 distance = np.linalg.norm(vector)
-                
-                if distance < self.radius:
-                    part.speed += (self.intensity/distance)*vector
+                if distance < self.radius and distance > 1e-3:
+                    part.speed += (self.intensity / distance) * vector
 
-        self.last_event = event 
-class simulation():
-    def __init__(self, dt = 0.01, N = 600, heat = 0.01, reacteur = True, big = True, collision_force = 81000, constant_field = np.array([0.,0.]), warp = True, warp_radius = 30., gravity = 80000, trace_paths=False, full_screen = False) -> None:
-        full_screen = False
+        self.last_event = event
+
+
+# ---------------------------------------------------------------------------
+# MAIN SIMULATION CLASS
+# ---------------------------------------------------------------------------
+class Simulation:
+    def __init__(
+        self,
+        dt=0.01,
+        N=600,
+        heat=0.01,
+        reacteur=True,
+        big=True,
+        collision_force=81000,
+        constant_field=np.array([0.0, 0.0]),
+        warp=True,
+        warp_radius=30.0,
+        gravity=80000,
+        trace_paths=False,
+        full_screen=False,
+    ):
+
+        # ---------------------- CONFIGURATION ----------------------
         pygame.init()
-        if full_screen:
-            self.x, self.y = 2500, 1000
-        else:
-            self.x, self.y = 1850,900
-        self.screen = pygame.display.set_mode((self.x,self.y), pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE) 
-        self.clock = pygame.time.Clock()
         self.dt = dt
         self.N = N
         self.heat = heat
-        self.border = limits(x = self.x,y =  self.y, dt = self.dt)
         self.reacteur = reacteur
         self.big = big
         self.collision_force = collision_force
-        self.warp_radius = warp_radius
-        self.warp_intensity = -400
+        self.constant_field = constant_field
         self.gravity = gravity
         self.trace_paths = trace_paths
-        self.flow = Flow(self.x,self.y)
-        if self.gravity is not None:
-            #self.grav_force = float(self.gravity)
-            self.gravitational = Gravitation(grav_force = self.gravity)
-        if reacteur:
-            self.initialize_reactor()
-        if warp:
-            self.warp = Warp(dt = self.dt, radius = self.warp_radius, intensity= self.warp_intensity, y = self.y, x = self.x)
 
+        # Screen configuration
+        self.full_screen = full_screen
+        self.x, self.y = (2500, 1000) if full_screen else (1850, 900)
+        self.screen = pygame.display.set_mode(
+            (self.x, self.y),
+            pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE
+        )
+        self.clock = pygame.time.Clock()
+
+        # Warp configuration
+        self.warp_radius = warp_radius
+        self.warp_intensity = -400
+        if warp:
+            self.warp = Warp(
+                dt=self.dt,
+                radius=self.warp_radius,
+                intensity=self.warp_intensity,
+                y=self.y,
+                x=self.x,
+            )
+
+        # Field / physics components
+        self.border = limits(x=self.x, y=self.y, dt=self.dt)
+        self.flow = Flow(self.x, self.y)
+        self.collision = Collision(self.x, self.y, 75)
+        self.lj = lj_repulsion(collision_force=collision_force, constant_field=constant_field)
+        self.gravitational = Gravitation(grav_force=self.gravity) if self.gravity else None
+
+        # OpenGL setup
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
         gluOrtho2D(0, self.x, 0, self.y)
         glMatrixMode(GL_MODELVIEW)
-        self.particles = []
-        self.generate_particles(N, x_max = self.x, y_max = self.y, custom = True, random= True, trace = True)
-        self.collision = Collision(self.x,self.y,75)
-        self.lj = lj_repulsion(collision_force=collision_force,constant_field=constant_field)
-        
-        
 
+        # Particles setup
+        self.particles = []
+        self.generate_particles(N, x_max=self.x, y_max=self.y, custom=True, random=True, trace=True)
+
+        # Optional main particle
         if self.big:
-            self.Boule = Particle( position=np.array([self.x/2,self.y/2]), speed = np.array([0.,0.]), acc = np.array([0.,0.]), size = 50, color = (1,0,0),mass = 75)
-            self.particles.append(self.Boule)
-            self.BOULE = DraggableCircle(self.Boule,self.dt)
+            self.initialize_main_particle()
+
+        # Optional reactor
+        if self.reacteur:
+            self.initialize_reactor()
+
+        # Start simulation
         self.mainloop()
 
+    # -------------------------------------------------------------------
+    # INITIALIZATION HELPERS
+    # -------------------------------------------------------------------
+    def initialize_main_particle(self):
+        """Creates central 'Boule' particle for interaction."""
+        self.Boule = Particle(
+            position=np.array([self.x / 2, self.y / 2]),
+            speed=np.array([0.0, 0.0]),
+            acc=np.array([0.0, 0.0]),
+            size=50,
+            color=(1, 0, 0),
+            mass=75,
+        )
+        self.particles.append(self.Boule)
+        self.BOULE = DraggableCircle(self.Boule, self.dt)
+
     def initialize_reactor(self):
-        self.stream = Stream(x1 = 300,x2 = 500, y1 = 300, y2= 600,dt = self.dt, field = np.array([0.,-10]))
-        self.Istream = Stream(x1 = 350,x2 = 450, y1 = 350, y2= 600,dt = self.dt, field = np.array([0.,-50]))
+        """Defines flow regions for the 'reactor' setup."""
+        dt = self.dt
+        self.stream = Stream(300, 500, 300, 600, dt, np.array([0.0, -10]))
+        self.Istream = Stream(350, 450, 350, 600, dt, np.array([0.0, -50]))
+        self.Lstream = Stream(100, 300, 400, 600, dt, np.array([7.0, -2.0]))
+        self.Rstream = Stream(500, 700, 400, 600, dt, np.array([-7.0, -2.0]))
+        self.llstream = Stream(300, 400, 0, 175, dt, np.array([-5.0, 1.0]))
+        self.lrstream = Stream(400, 500, 0, 175, dt, np.array([5.0, 1.0]))
+        self.lustream = Stream(25, 300, 25, 300, dt, np.array([0.5, 8.0]))
+        self.rustream = Stream(500, 775, 25, 300, dt, np.array([-0.5, 8.0]))
 
-        self.Lstream = Stream(x1 = 100,x2 = 300, y1 = 400, y2= 600,dt = self.dt, field = np.array([7.,-2.]))
-        self.Rstream = Stream(x1 = 500,x2 = 700, y1 = 400, y2= 600,dt = self.dt, field = np.array([-7.,-2.]))
-
-        self.llstream = Stream(x1 =300, x2 = 400, y1 = 0, y2 = 175, dt = self.dt, field = np.array([-5.,1]))
-        self.lrstream = Stream(x1 =400, x2 = 500, y1 = 0, y2 = 175, dt = self.dt, field = np.array([5.,1]))
-
-        self.lustream = Stream(x1 =25 , x2 = 300, y1 = 25, y2 = 300, dt = self.dt, field = np.array([0.5,8]))
-        self.rustream = Stream(x1 =500, x2 = 775, y1 = 25, y2 = 300, dt = self.dt, field = np.array([-0.5,8]))
-
-
-
-    def generate_particles(self, n_particles, random = True , x_max = 600, y_max = 600, regular = False, custom = True, trace = False):
+    # -------------------------------------------------------------------
+    # PARTICLE GENERATION
+    # -------------------------------------------------------------------
+    def generate_particles(self, n_particles, random=True, x_max=600, y_max=600, regular=False, custom=True, trace=False):
+        """Populates the particle list."""
         if custom:
             print("Custom particles")
-            first_factor = 20
-            factor2 = first_factor*1.
-            factor3 = factor2*1.
-            mass_size = 3
-            #self.particles.append(Particle((np.array((0. + 500,100. + 500))),speed = np.array([625.,0]),  size = first_factor,color = (0,100,0), heat_factor = self.heat,mass = first_factor*mass_size))
-            #self.particles.append(Particle((np.array((0. + 500,-100. + 500))),speed = np.array([-625.,0]),  size = first_factor,color = (100,0,0), heat_factor = self.heat,mass = first_factor*mass_size))
-            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = first_factor,color = (100,0,0), heat_factor = self.heat,mass = first_factor*mass_size))
-            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = factor2,color = (0,100,0), heat_factor = self.heat,mass = factor2*mass_size))
-            self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = factor3,color = (0,0,100), heat_factor = self.heat,mass = factor3*mass_size))
-            #self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*300,(np.random.random()-0.5)*300]),  size = factor3,color = (0,0,1), heat_factor = self.heat,mass = factor3*mass_size))
+            first_factor, mass_size = 20, 3
+            for color in [(100, 0, 0), (0, 100, 0), (0, 0, 100)]:
+                pos = np.array([np.random.random() * self.x, np.random.random() * self.y])
+                vel = np.array([(np.random.random() - 0.5) * 300, (np.random.random() - 0.5) * 300])
+                self.particles.append(
+                    Particle(pos, speed=vel, size=first_factor, color=color, heat_factor=self.heat, mass=first_factor * mass_size)
+                )
 
-            #self.particles.append(Particle((np.array((np.random.random()*self.x,np.random.random()*self.y))),speed = np.array([(np.random.random()-0.5)*600,(np.random.random()-0.5)*600]),  size = first_factor,color = (0,0,0), heat_factor = self.heat,mass = first_factor/2))
         elif random:
-            x_range = [np.random.random()*x_max for i in range(n_particles)]
-            y_range = [np.random.random()*y_max for i in range(n_particles)]
+            for _ in range(n_particles):
+                pos = np.array([np.random.random() * x_max, np.random.random() * y_max])
+                vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
+                self.particles.append(Particle(pos, speed=vel, size=12, heat_factor=self.heat, mass=2, trace=False))
 
-            for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))),speed = np.array([np.random.random()*300,(np.random.random()-0.5)*400]),  size = 12, heat_factor = self.heat,mass = 2, trace = False))
         elif regular:
-            base_x = 200.
-            final_x = 600.
-            base_y = 200.
-            final_y = 400.
-            x_range = np.linspace(base_x,final_x,n_particles)
-            y_range = np.linspace(base_y,final_y,n_particles)
+            xs = np.linspace(200, 600, n_particles)
+            ys = np.linspace(200, 400, n_particles)
+            for x, y in zip(xs, ys):
+                vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
+                self.particles.append(Particle(np.array([x, y]), speed=vel, size=5, heat_factor=self.heat, trace=False))
 
-            for x,y in zip(x_range, y_range):
-                self.particles.append(Particle((np.array((x,y))),speed = np.array([np.random.random()*300,(np.random.random()-0.5)*400]),  size = 5, heat_factor = self.heat, trace = False))
-    
+    # -------------------------------------------------------------------
+    # MAIN LOOP
+    # -------------------------------------------------------------------
     def mainloop(self):
-        i = 0
-        running = True
-
+        running, frame = True, 0
 
         while running:
-            i+=1
-
-
+            frame += 1
             for event in pygame.event.get():
                 self.last_event = event
                 if event.type == pygame.QUIT:
@@ -206,32 +206,29 @@ class simulation():
                 if self.big:
                     self.BOULE.handle_events(event)
 
-            self.warp.handle_events(self.last_event,self.particles,self.x,self.y)
-                
+            # Warp interaction
+            if hasattr(self, "warp"):
+                self.warp.handle_events(self.last_event, self.particles, self.x, self.y)
 
+            # Clear frame
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             glLoadIdentity()
-            
-            self.collision.check_collision(all_parts = self.particles)
-            if self.gravity is not None:
-                #compute_gravity_particles(particles = self.particles, grav_force = self.grav_force)
-                self.gravitational.compute_gravity(all_particles = self.particles, x = self.x, y = self.y)
 
+            # Collisions and gravity
+            self.collision.check_collision(all_parts=self.particles)
+            if self.gravitational:
+                self.gravitational.compute_gravity(all_particles=self.particles, x=self.x, y=self.y)
+
+            # Particle physics + rendering
             for particle in self.particles:
-
-                particle.step(dt = self.dt)
+                particle.step(dt=self.dt)
                 self.border.in_range(particle)
 
                 if self.reacteur:
-                    self.stream.flow(particle)
-                    self.Istream.flow(particle)
-                    self.Lstream.flow(particle)
-                    self.Rstream.flow(particle)
-                    self.llstream.flow(particle)
-                    self.lrstream.flow(particle)
-                    self.lustream.flow(particle)
-                    self.rustream.flow(particle)
-                
+                    for s in [self.stream, self.Istream, self.Lstream, self.Rstream,
+                              self.llstream, self.lrstream, self.lustream, self.rustream]:
+                        s.flow(particle)
+
                 if self.trace_paths:
                     particle.draw_trace()
                 particle.draw()
@@ -239,17 +236,26 @@ class simulation():
             pygame.display.flip()
             self.clock.tick(60)
 
-    pygame.quit()
+        pygame.quit()
 
+
+# ---------------------------------------------------------------------------
+# ENTRY POINT
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    simulation( dt = 0.002,
-                N = 100,
-                  heat = 0.0,
-                    reacteur = False,
-                      big = False,
-                        collision_force = -10000,
-                            constant_field= np.array([0.,0.]),
-                              warp = True,
-                                warp_radius =80,
-                                  gravity = 30000, 
-                                   trace_paths=True)
+    sim_params = dict(
+        dt=0.002,
+        N=100,
+        heat=0.0,
+        reacteur=False,
+        big=False,
+        collision_force=-10000,
+        constant_field=np.array([0.0, 0.0]),
+        warp=True,
+        warp_radius=80,
+        gravity=30000,
+        trace_paths=True,
+        full_screen=False,
+    )
+
+    Simulation(**sim_params)
