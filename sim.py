@@ -145,7 +145,7 @@ class Simulation:
         # Particles setup
         self.particles = []
         self.chains = []
-        self.generate_particles(N, x_max=self.x, y_max=self.y, random=True)
+        self.generate_particles(N, x_max=self.x, y_max=self.y, random=False)
         for i in range(chains):
             self.chains.append(ParticleChain(self.particles[10*i:10*(1+i)], k=-500.0, damping=-50.0))
         # Optional main particle
@@ -213,7 +213,7 @@ class Simulation:
             for _ in range(n_particles):
                 pos = np.array([np.random.random() * x_max, np.random.random() * y_max])
                 vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
-                charge = np.random.choice([-1,1])*20
+                charge = np.random.randn()*10
 
                 
 
@@ -307,7 +307,7 @@ if __name__ == "__main__":
         collision_force=-10000,
         constant_field=np.array([0.0, 0.0]),
         warp=True,
-        warp_radius=200,
+        warp_radius=300,
         gravity=50000,
         trace_paths=True,
         full_screen=False,
@@ -315,7 +315,7 @@ if __name__ == "__main__":
         closed = False,
         collision_efficency = 0.999,
         friction = 1.0,
-        Sound = False,
+        Sound = True,
         collision_bin_size = 75,
     )
 
@@ -387,4 +387,4 @@ if __name__ == "__main__":
         large_fields = True,
     )
 
-    Simulation(**electric)
+    Simulation(**body_params)
