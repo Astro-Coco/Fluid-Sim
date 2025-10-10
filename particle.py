@@ -2,21 +2,35 @@ import numpy as np
 from OpenGL.GLU import *
 from OpenGL.GL import *
 import pygame
+
+
 class Particle:
-    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,200,255), size = 8, heat_factor = 0.04, mass = 1, trace = False, ghost = False):
+    def __init__(self, position, speed = np.array([5.,0.]), acc = np.array([0.,0.]),  color = (0,0,0), size = 8, heat_factor = 0.04, mass = 1, trace = False, ghost = False, field = np.array([0.,0.]), charge = 0.0, friction = None):
         self.position = np.array(position)
         self.speed = np.array(speed)
         self.acc = acc
-        self.color = color
         self.size = size
         self.mass = mass
         self.trace = trace
         self.ghost = ghost
+        self.field = field
+        self.friction = friction
+        self.charge = charge
+
+        if color == (0,0,0):
+            norm_charge = np.tanh(charge / 40)
+            if norm_charge >= 0:
+                self.color = (1.0, 1.0 - norm_charge, 1.0 - norm_charge)  # white→red
+            else:
+                self.color = (1.0 + norm_charge, 1.0 + norm_charge, 1.0)  # white→blue
+        else:
+            self.color = color
+        
         
 
         self.heat_factor = heat_factor
         self.trace = [np.copy(position)]
-        self.max_trail_length = 200
+        self.max_trail_length = 250
 
     def draw(self):
         glColor3fv(self.color)
@@ -67,12 +81,13 @@ class Particle:
 
 
     def step(self, dt):
-        friction = True
+    
+        self.acc += self.field
         self.speed = self.speed + self.acc*dt
 
-        if friction:
+        if self.friction is not None:
             v = np.linalg.norm(self.speed)
-            term = dt*1/20000*self.speed*v if v > 300 else 0
+            term = self.friction*dt*1/20000*self.speed*v if v > 200 else 0
             self.speed -= term
         if self.heat_factor > 0 and self.heat_factor is not None:
             self.speed += self.heat_factor*np.random.randn(2)

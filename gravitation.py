@@ -1,16 +1,16 @@
 
-import math
 import numpy as np
-from itertools import groupby
 from particle import Particle
+
 class Gravitation():
-    def __init__(self, grav_force):
+    def __init__(self, grav_force, electric_force = 50000) -> None:
 
         self.grav_force = grav_force
+        self.electric_force = electric_force  # Coulomb's constant in N·m²/C²
 
     def compute_gravity(self, all_particles, x= 800, y = 600, periodic=False):
 
-        all_parts = all_particles.copy()
+        all_parts = all_particles
         if periodic:
             for i in [-1,0,1]:
                 for j in [-1,0,1]:
@@ -21,6 +21,7 @@ class Gravitation():
                         all_parts.append(new_part)
         
         for index1, part1 in enumerate(all_parts):
+            
 
             for index2, part2 in enumerate(all_parts):
                 if index1 > index2:
@@ -29,9 +30,16 @@ class Gravitation():
                     intensity = -part1.mass * part2.mass * self.grav_force / norme
 
                     unit_acc = position_vector * intensity / norme
-                    part1.acc = part1.acc - unit_acc / part1.mass
-                    part2.acc = part2.acc + unit_acc / part2.mass
+                    part1.acc -= unit_acc / part1.mass
+                    part2.acc += unit_acc / part2.mass
+
+                    intensity = part1.charge * part2.charge * self.electric_force / norme
+
+                    unit_acc = position_vector * intensity / norme
+                    part1.acc -= unit_acc / part1.mass
+                    part2.acc += unit_acc / part2.mass
+
+
                     
                 else:
                     break
-

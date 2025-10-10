@@ -11,8 +11,8 @@ from Collisions import Collision
 from FLOW import Flow
 from particle import Particle
 from gravitation import Gravitation
-
-
+from features import DraggableCircle
+from sound import SoundStreamer
 # ---------------------------------------------------------------------------
 # WARP TOOL
 # ---------------------------------------------------------------------------
@@ -60,18 +60,26 @@ class Warp:
 class Simulation:
     def __init__(
         self,
-        dt=0.01,
-        N=600,
+        dt=0.002,
+        N=200,
         heat=0.01,
         reacteur=True,
         big=True,
         collision_force=81000,
         constant_field=np.array([0.0, 0.0]),
         warp=True,
-        warp_radius=30.0,
-        gravity=80000,
+        warp_radius=80.0,
+        gravity=30000,
         trace_paths=False,
         full_screen=False,
+        three_body_problem=True,
+        closed = False,
+        window = (1850,750),
+        friction = 1,
+        collision_efficency = 1,
+        Sound = False,
+        collision_bin_size = 75,
+        electric_force = 20000,
     ):
 
         # ---------------------- CONFIGURATION ----------------------
@@ -85,10 +93,17 @@ class Simulation:
         self.constant_field = constant_field
         self.gravity = gravity
         self.trace_paths = trace_paths
+        self.three_body_problem = three_body_problem
+        self.closed = closed
+        self.friction = friction
+        self.collision_efficency = collision_efficency
+        self.Sound = Sound
+        self.collision_bin_size = collision_bin_size
+        self.electric_force = electric_force  # Coulomb's constant in N·m²/C²
 
         # Screen configuration
         self.full_screen = full_screen
-        self.x, self.y = (2500, 1000) if full_screen else (1850, 900)
+        self.x, self.y = window
         self.screen = pygame.display.set_mode(
             (self.x, self.y),
             pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE
@@ -108,11 +123,12 @@ class Simulation:
             )
 
         # Field / physics components
-        self.border = limits(x=self.x, y=self.y, dt=self.dt)
+        self.border = limits(x=self.x, y=self.y, dt=self.dt, top_bottom = self.closed)
         self.flow = Flow(self.x, self.y)
-        self.collision = Collision(self.x, self.y, 75)
-        self.lj = lj_repulsion(collision_force=collision_force, constant_field=constant_field)
-        self.gravitational = Gravitation(grav_force=self.gravity) if self.gravity else None
+        self.collision = Collision(self.x, self.y, self.collision_bin_size, self.collision_efficency)
+        self.gravitational = Gravitation(grav_force=self.gravity, electric_force=self.electric_force)
+        if self.Sound:
+            self.sound = SoundStreamer()
 
         # OpenGL setup
         glMatrixMode(GL_PROJECTION)
@@ -122,7 +138,7 @@ class Simulation:
 
         # Particles setup
         self.particles = []
-        self.generate_particles(N, x_max=self.x, y_max=self.y, custom=True, random=True, trace=True)
+        self.generate_particles(N, x_max=self.x, y_max=self.y, random=False)
 
         # Optional main particle
         if self.big:
@@ -131,6 +147,11 @@ class Simulation:
         # Optional reactor
         if self.reacteur:
             self.initialize_reactor()
+        self.t = 0
+        self.t0 = 0
+        self.delta = 60
+        self.val=0
+        self.val_fin = 1000
 
         # Start simulation
         self.mainloop()
@@ -166,30 +187,40 @@ class Simulation:
     # -------------------------------------------------------------------
     # PARTICLE GENERATION
     # -------------------------------------------------------------------
-    def generate_particles(self, n_particles, random=True, x_max=600, y_max=600, regular=False, custom=True, trace=False):
+    def generate_particles(self, n_particles, random=True, x_max=600, y_max=600):
         """Populates the particle list."""
-        if custom:
+        electrical_field = True
+        if self.three_body_problem:
             print("Custom particles")
             first_factor, mass_size = 20, 3
             for color in [(100, 0, 0), (0, 100, 0), (0, 0, 100)]:
                 pos = np.array([np.random.random() * self.x, np.random.random() * self.y])
                 vel = np.array([(np.random.random() - 0.5) * 300, (np.random.random() - 0.5) * 300])
                 self.particles.append(
-                    Particle(pos, speed=vel, size=first_factor, color=color, heat_factor=self.heat, mass=first_factor * mass_size)
+                    Particle(pos, speed=vel, size=first_factor, color=color, heat_factor=self.heat, mass=first_factor * mass_size, field = self.constant_field,friction =  self.friction)
                 )
 
         elif random:
             for _ in range(n_particles):
                 pos = np.array([np.random.random() * x_max, np.random.random() * y_max])
                 vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
-                self.particles.append(Particle(pos, speed=vel, size=12, heat_factor=self.heat, mass=2, trace=False))
+                self.particles.append(Particle(pos, speed=vel, size=15, heat_factor=self.heat, mass=2, trace=False, field = self.constant_field, friction =  self.friction))
+        elif electrical_field:
+            for _ in range(n_particles):
+                pos = np.array([np.random.random() * x_max, np.random.random() * y_max])
+                vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
+                #charge = np.random.choice([-1,1])*20
+                charge = np.random.randn()*10
+                
 
-        elif regular:
+                self.particles.append(Particle(pos, speed=vel, size=15, heat_factor=self.heat,  mass=2, trace=False, field = self.constant_field, friction =  self.friction, charge = charge))
+            
+        else:   
             xs = np.linspace(200, 600, n_particles)
             ys = np.linspace(200, 400, n_particles)
             for x, y in zip(xs, ys):
                 vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
-                self.particles.append(Particle(np.array([x, y]), speed=vel, size=5, heat_factor=self.heat, trace=False))
+                self.particles.append(Particle(np.array([x, y]), speed=vel, size=5, heat_factor=self.heat, trace=False, field = self.constant_field))
 
     # -------------------------------------------------------------------
     # MAIN LOOP
@@ -220,9 +251,19 @@ class Simulation:
                 self.gravitational.compute_gravity(all_particles=self.particles, x=self.x, y=self.y)
 
             # Particle physics + rendering
+            fs = []
             for particle in self.particles:
                 particle.step(dt=self.dt)
                 self.border.in_range(particle)
+                if self.Sound:
+                    f_x = 140 + (particle.position[0]/self.x)*50
+                    f_y = 140 + (particle.position[1]/self.y)*50
+                    f_z = 140 + (np.hypot(particle.speed[0]/self.x,particle.speed[1]/self.y))*50
+                    if f_z > 300:
+                        f_z = 300
+                    fs.append(f_x)
+                    fs.append(f_y)
+                    fs.append(f_z)
 
                 if self.reacteur:
                     for s in [self.stream, self.Istream, self.Lstream, self.Rstream,
@@ -232,6 +273,11 @@ class Simulation:
                 if self.trace_paths:
                     particle.draw_trace()
                 particle.draw()
+            else:
+                             
+                if self.Sound:
+                    self.sound.update_freqs(fs[0], fs[1], fs[2], fs[3], fs[4], fs[5], fs[6], fs[7], fs[8])
+                #print(mean)
 
             pygame.display.flip()
             self.clock.tick(60)
@@ -243,19 +289,88 @@ class Simulation:
 # ENTRY POINT
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    sim_params = dict(
+    body_params = dict(
         dt=0.002,
-        N=100,
-        heat=0.0,
+        heat=5.0,
         reacteur=False,
         big=False,
         collision_force=-10000,
         constant_field=np.array([0.0, 0.0]),
         warp=True,
-        warp_radius=80,
-        gravity=30000,
+        warp_radius=200,
+        gravity=50000,
         trace_paths=True,
         full_screen=False,
+        three_body_problem=True,
+        closed = False,
+        collision_efficency = 0.999,
+        friction = 1.0,
+        Sound = False,
+        collision_bin_size = 75,
     )
 
-    Simulation(**sim_params)
+    gaz_params = dict(
+        dt=0.01,
+        N=300,
+        heat=50.0,
+        reacteur=False,
+        big=False,
+        collision_force=-10000,
+        constant_field=np.array([0., 0.0]),
+        warp=True,
+        warp_radius=80,
+        gravity=None,
+        trace_paths=None,
+        full_screen=False,
+        three_body_problem=False,
+        closed = True,
+        collision_efficency = 0.98,
+        friction = 200,
+        Sound = False,
+        collision_bin_size = 20,
+    )
+
+    liquid_params = dict(
+        dt=0.01,
+        N=500,
+        heat=15.0,
+        reacteur=False,
+        big=False,
+        collision_force=-10000,
+        constant_field=np.array([0., -500.0]),
+        warp=True,
+        warp_radius=80,
+        gravity=None,
+        trace_paths=None,
+        full_screen=False,
+        three_body_problem=False,
+        closed = True,
+        collision_efficency = 0.95,
+        friction = 10,
+        Sound = False,
+        collision_bin_size = 40,
+    )
+
+    electric = dict(
+        dt=0.01,
+        N=75,
+        heat=2.0,
+        reacteur=False,
+        big=False,
+        collision_force=-10000,
+        constant_field=np.array([0., 0.0]),
+        warp=True,
+        warp_radius=80,
+        gravity=50,
+        trace_paths=None,
+        full_screen=False,
+        three_body_problem=False,
+        closed = True,
+        collision_efficency = 0.99,
+        friction = 100,
+        Sound = False,
+        collision_bin_size = 25,
+        electric_force = 500,
+    )
+
+    Simulation(**electric)
