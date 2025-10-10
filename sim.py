@@ -13,6 +13,8 @@ from particle import Particle
 from gravitation import Gravitation
 from features import DraggableCircle
 from sound import SoundStreamer
+from link import ParticleChain
+
 # ---------------------------------------------------------------------------
 # WARP TOOL
 # ---------------------------------------------------------------------------
@@ -80,6 +82,8 @@ class Simulation:
         Sound = False,
         collision_bin_size = 75,
         electric_force = 20000,
+        chains = 0,
+        large_fields = True,
     ):
 
         # ---------------------- CONFIGURATION ----------------------
@@ -100,6 +104,7 @@ class Simulation:
         self.Sound = Sound
         self.collision_bin_size = collision_bin_size
         self.electric_force = electric_force  # Coulomb's constant in N·m²/C²
+        self.large_fields = large_fields
 
         # Screen configuration
         self.full_screen = full_screen
@@ -126,7 +131,8 @@ class Simulation:
         self.border = limits(x=self.x, y=self.y, dt=self.dt, top_bottom = self.closed)
         self.flow = Flow(self.x, self.y)
         self.collision = Collision(self.x, self.y, self.collision_bin_size, self.collision_efficency)
-        self.gravitational = Gravitation(grav_force=self.gravity, electric_force=self.electric_force)
+        if self.large_fields:
+            self.gravitational = Gravitation(grav_force=self.gravity, electric_force=self.electric_force)
         if self.Sound:
             self.sound = SoundStreamer()
 
@@ -138,8 +144,10 @@ class Simulation:
 
         # Particles setup
         self.particles = []
-        self.generate_particles(N, x_max=self.x, y_max=self.y, random=False)
-
+        self.chains = []
+        self.generate_particles(N, x_max=self.x, y_max=self.y, random=True)
+        for i in range(chains):
+            self.chains.append(ParticleChain(self.particles[10*i:10*(1+i)], k=-500.0, damping=-50.0))
         # Optional main particle
         if self.big:
             self.initialize_main_particle()
@@ -147,11 +155,7 @@ class Simulation:
         # Optional reactor
         if self.reacteur:
             self.initialize_reactor()
-        self.t = 0
-        self.t0 = 0
-        self.delta = 60
-        self.val=0
-        self.val_fin = 1000
+
 
         # Start simulation
         self.mainloop()
@@ -209,8 +213,8 @@ class Simulation:
             for _ in range(n_particles):
                 pos = np.array([np.random.random() * x_max, np.random.random() * y_max])
                 vel = np.array([np.random.random() * 300, (np.random.random() - 0.5) * 400])
-                #charge = np.random.choice([-1,1])*20
-                charge = np.random.randn()*10
+                charge = np.random.choice([-1,1])*20
+
                 
 
                 self.particles.append(Particle(pos, speed=vel, size=15, heat_factor=self.heat,  mass=2, trace=False, field = self.constant_field, friction =  self.friction, charge = charge))
@@ -247,8 +251,11 @@ class Simulation:
 
             # Collisions and gravity
             self.collision.check_collision(all_parts=self.particles)
-            if self.gravitational:
+            if self.large_fields:
                 self.gravitational.compute_gravity(all_particles=self.particles, x=self.x, y=self.y)
+            # Apply spring-damper constraints
+            for chain in self.chains:
+                chain.apply_forces()
 
             # Particle physics + rendering
             fs = []
@@ -273,6 +280,9 @@ class Simulation:
                 if self.trace_paths:
                     particle.draw_trace()
                 particle.draw()
+                for chain in self.chains:
+                    chain.draw()
+
             else:
                              
                 if self.Sound:
@@ -319,7 +329,7 @@ if __name__ == "__main__":
         constant_field=np.array([0., 0.0]),
         warp=True,
         warp_radius=80,
-        gravity=None,
+        gravity=0.0,
         trace_paths=None,
         full_screen=False,
         three_body_problem=False,
@@ -328,6 +338,7 @@ if __name__ == "__main__":
         friction = 200,
         Sound = False,
         collision_bin_size = 20,
+        large_fields = False
     )
 
     liquid_params = dict(
@@ -340,7 +351,7 @@ if __name__ == "__main__":
         constant_field=np.array([0., -500.0]),
         warp=True,
         warp_radius=80,
-        gravity=None,
+        gravity=0.,
         trace_paths=None,
         full_screen=False,
         three_body_problem=False,
@@ -349,6 +360,7 @@ if __name__ == "__main__":
         friction = 10,
         Sound = False,
         collision_bin_size = 40,
+        large_fields = False,
     )
 
     electric = dict(
@@ -371,6 +383,8 @@ if __name__ == "__main__":
         Sound = False,
         collision_bin_size = 25,
         electric_force = 500,
+        chains = 2,
+        large_fields = True,
     )
 
     Simulation(**electric)

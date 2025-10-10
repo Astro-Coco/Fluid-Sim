@@ -18,7 +18,7 @@ class Particle:
         self.charge = charge
 
         if color == (0,0,0):
-            norm_charge = np.tanh(charge / 40)
+            norm_charge = np.tanh(charge / 20)
             if norm_charge >= 0:
                 self.color = (1.0, 1.0 - norm_charge, 1.0 - norm_charge)  # white→red
             else:
