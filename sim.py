@@ -84,6 +84,7 @@ class Simulation:
         electric_force = 20000,
         chains = 0,
         large_fields = True,
+        no_parts = False,
     ):
 
         # ---------------------- CONFIGURATION ----------------------
@@ -105,6 +106,7 @@ class Simulation:
         self.collision_bin_size = collision_bin_size
         self.electric_force = electric_force  # Coulomb's constant in N·m²/C²
         self.large_fields = large_fields
+        self.no_parts = no_parts
 
         # Screen configuration
         self.full_screen = full_screen
@@ -136,6 +138,7 @@ class Simulation:
         if self.Sound:
             self.sound = SoundStreamer()
 
+
         # OpenGL setup
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
@@ -145,7 +148,7 @@ class Simulation:
         # Particles setup
         self.particles = []
         self.chains = []
-        self.generate_particles(N, x_max=self.x, y_max=self.y, random=False)
+        self.generate_particles(N, x_max=self.x, y_max=self.y, random=False, no_parts = self.no_parts)
         for i in range(chains):
             self.chains.append(ParticleChain(self.particles[10*i:10*(1+i)], k=-500.0, damping=-50.0))
         # Optional main particle
@@ -156,6 +159,7 @@ class Simulation:
         if self.reacteur:
             self.initialize_reactor()
 
+        self.pendulum = Pendulum(center=(self.x/2, self.y/2), length=200, sim=self, angle=45)
 
         # Start simulation
         self.mainloop()
@@ -191,8 +195,10 @@ class Simulation:
     # -------------------------------------------------------------------
     # PARTICLE GENERATION
     # -------------------------------------------------------------------
-    def generate_particles(self, n_particles, random=True, x_max=600, y_max=600):
+    def generate_particles(self, n_particles, random=True, x_max=600, y_max=600, no_parts = False):
         """Populates the particle list."""
+        if no_parts:
+            return
         electrical_field = True
         if self.three_body_problem:
             print("Custom particles")
@@ -289,11 +295,56 @@ class Simulation:
                     self.sound.update_freqs(fs[0], fs[1], fs[2], fs[3], fs[4], fs[5], fs[6], fs[7], fs[8])
                 #print(mean)
 
+
+            self.pendulum.step(self.dt)
+            self.pendulum.draw()
             pygame.display.flip()
             self.clock.tick(60)
 
         pygame.quit()
 
+class Pendulum:
+    def __init__(self, center, length, sim, angle):
+        self.center = np.array(center, dtype=float)
+        self.length = length
+        self.sim = sim
+        self.angle = angle*np.pi/180  # In degrees defined from bottom CCW
+        self.angular_velocity = 0.0
+        self.angular_acceleration = 0.0
+        
+        particle_initial_position = center + length*np.array([np.cos(self.angle), -np.sin(self.angle)])
+        tangent = np.array([-np.sin(self.angle), -np.cos(self.angle)], dtype=float)  # derivative of position
+        initial_speed = self.angular_velocity * self.length * tangent
+        self.Part = Particle(particle_initial_position, speed=initial_speed, size=20, color=(255,255,255), heat_factor=0, mass=20, field = self.sim.constant_field, friction =  0)
+        self.sim.particles.append(self.Part)
+
+    def step(self, dt):
+        #Pendulum lenth constraining function
+        #Find closest point on circle of radius length around center
+        direction = self.Part.position - self.center
+        direction_normalized = np.array(direction / np.linalg.norm(direction))
+        closest_point = self.center + direction_normalized * self.length
+        self.Part.position = closest_point
+
+        # Constrain position to circle and remove radial velocity so particle stays on the circle
+        direction = np.array(self.Part.position, dtype=float) - self.center
+        dist = np.linalg.norm(direction)
+        if dist == 0:
+            return
+        direction_normalized = direction / dist
+        closest_point = self.center + direction_normalized * self.length
+        self.Part.position = closest_point
+        # Project out radial component of velocity (keep only tangential)
+        v = np.array(self.Part.speed, dtype=float)
+        radial_comp = np.dot(v, direction_normalized) * direction_normalized
+        self.Part.speed = v - radial_comp
+    
+    def draw(self):
+        glColor3f(1, 1, 1)
+        glBegin(GL_LINES)
+        glVertex2f(self.center[0], self.center[1])
+        glVertex2f(self.Part.position[0], self.Part.position[1])
+        glEnd()
 
 # ---------------------------------------------------------------------------
 # ENTRY POINT
@@ -387,4 +438,25 @@ if __name__ == "__main__":
         large_fields = True,
     )
 
-    Simulation(**body_params)
+    pendulum = dict(
+        dt=0.002,
+        heat=5.0,
+        reacteur=False,
+        big=False,
+        collision_force=-10000,
+        constant_field=np.array([0.0, -50000.0]),
+        warp=True,
+        warp_radius=300,
+        gravity=50000,
+        trace_paths=True,
+        full_screen=False,
+        three_body_problem=True,
+        closed = False,
+        collision_efficency = 0.999,
+        friction = 0.0,
+        Sound = False,
+        collision_bin_size = 75,
+        no_parts = True,
+    )
+
+    Simulation(**pendulum)

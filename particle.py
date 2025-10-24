@@ -83,7 +83,16 @@ class Particle:
     def step(self, dt):
     
         self.acc += self.field
-        self.speed = self.speed + self.acc*dt
+        #self.speed = self.speed + self.acc*dt
+
+        #Runge-Kutta 4th Order Integration could go here
+        k1 = dt*self.acc
+        k2 = dt*(self.acc + 0.5*k1)
+        k3 = dt*(self.acc + 0.5*k2)
+        k4 = dt*(self.acc + k3)
+        self.speed += (k1 + 2*k2 + 2*k3 + k4)/6
+
+
 
         if self.friction is not None:
             v = np.linalg.norm(self.speed)
@@ -93,8 +102,15 @@ class Particle:
             self.speed += self.heat_factor*np.random.randn(2)
             
         
-        self.position += self.speed*dt
-    
+        #self.position += self.speed*dt
+
+        #Runge-Kutta 4th Order Integration could go here
+        k1 = dt*self.speed
+        k2 = dt*(self.speed + 0.5*k1)
+        k3 = dt*(self.speed + 0.5*k2)
+        k4 = dt*(self.speed + k3)
+        self.position += (k1 + 2*k2 + 2*k3 + k4)/6
+
         if self.trace:
             if self.color != (0,0,0):
                 self.trace.append(np.copy(self.position))
